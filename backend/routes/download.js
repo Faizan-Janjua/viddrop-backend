@@ -33,8 +33,6 @@ router.all('/', async (req, res) => {
     const needsTrimming = !!(start_time || end_time);
 
     if (!needsTrimming && !isYouTube) {
-      console.log(`[DEBUG] Direct YT-DLP path for ${url}`);
-
       res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
       res.setHeader('Content-Type', 'video/mp4');
 
@@ -55,15 +53,16 @@ router.all('/', async (req, res) => {
       ytdlProcess.on('error', (err) => {
         console.error('[Direct download error]', err.message);
         if (!res.headersSent) {
-          return res.status(500).json({ error: 'Direct download failed', message: err.message });
+          return res.status(500).json({
+            error: 'Direct download failed',
+            message: err.message
+          });
         }
         res.end();
       });
 
       return;
     }
-
-    console.log(`[DEBUG] FFmpeg path for ${url}`);
 
     const info = await youtubedl(url, {
       getUrl: true,
@@ -118,18 +117,15 @@ router.all('/', async (req, res) => {
         '-crf 28',
         '-threads 0'
       ])
-      .on('start', (cmd) => {
-        console.log('[FFmpeg start]', cmd);
-      })
       .on('error', (err) => {
         console.error('[FFmpeg error]', err.message);
         if (!res.headersSent) {
-          return res.status(500).json({ error: 'Processing failed', message: err.message });
+          return res.status(500).json({
+            error: 'Processing failed',
+            message: err.message
+          });
         }
         res.end();
-      })
-      .on('end', () => {
-        console.log('[FFmpeg] Completed successfully');
       })
       .pipe(res, { end: true });
 
