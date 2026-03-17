@@ -2,21 +2,20 @@ const express = require('express');
 const router = express.Router();
 const youtubedl = require('youtube-dl-exec');
 const ffmpeg = require('fluent-ffmpeg');
-const path = require('path');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
 
 ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
 
 router.all('/', async (req, res) => {
     try {
-        const { url, format_id, start_time, end_time, filename } = req.method === 'POST' ? req.body : req.query;
+        const { url, format_id, start_time, end_time, filename } =
+            req.method === 'POST' ? req.body : req.query;
 
         if (!url) {
             return res.status(400).json({ error: 'URL is required' });
         }
 
-        const safeFilename = (filename || 'video').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.mp4';
+        const safeFilename =
+            (filename || 'video').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.mp4';
 
         res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
         res.setHeader('Content-Type', 'video/mp4');
@@ -30,29 +29,31 @@ router.all('/', async (req, res) => {
                 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             ],
             concurrentFragments: 5,
-            socketTimeout: 30,
+            socketTimeout: 30
         };
 
         const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
         const needsTrimming = !!(start_time || end_time);
 
         if (!needsTrimming && !isYouTube) {
-            console.log(`[DEBUG] Path: World's Fastest (Direct YT-DLP) for ${url}`);
+            console.log(`[DEBUG] Direct YT-DLP path for ${url}`);
 
             const ytdlProcess = youtubedl.exec(url, {
                 ...ytdlOptions,
-                output: '-',
+                output: '-'
             });
 
             ytdlProcess.stdout.pipe(res);
 
             ytdlProcess.stderr.on('data', (data) => {
-                if (data.toString().includes('ERROR')) {
-                    console.error(`[yt-dlp error] ${data}`);
+                const msg = data.toString();
+                if (msg.includes('ERROR')) {
+                    console.error('[yt-dlp error]', msg);
                 }
             });
 
-            ytdlProcess.on('error', () => {
+            ytdlProcess.on('error', (err) => {
+                console.error('[Direct download error]', err.message);
                 if (!res.headersSent) {
                     res.status(500).send('Direct download failed');
                 }
@@ -61,7 +62,7 @@ router.all('/', async (req, res) => {
             return;
         }
 
-        console.log(`[DEBUG] Path: Optimized FFmpeg for ${url}`);
+        console.log(`[DEBUG] FFmpeg path for ${url}`);
 
         try {
             const info = await youtubedl(url, {
@@ -71,14 +72,17 @@ router.all('/', async (req, res) => {
                 addHeader: [
                     'referer:https://www.tiktok.com/',
                     'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                ],
+                ]
             });
 
-            const urls = info.trim().split('\n').filter(line => line.trim().length > 0);
+            const urls = info
+                .trim()
+                .split('\n')
+                .filter(line => line.trim().length > 0);
 
             let command = ffmpeg();
 
-            urls.forEach(streamUrl => {
+            urls.forEach((streamUrl) => {
                 if (start_time) {
                     command = command.input(streamUrl.trim()).inputOptions(`-ss ${start_time}`);
                 } else {
@@ -89,7 +93,11 @@ router.all('/', async (req, res) => {
             if (end_time) {
                 const startSec = parseTimeToSeconds(start_time || '0');
                 const endSec = parseTimeToSeconds(end_time);
-                command = command.setDuration(endSec - startSec);
+                const duration = endSec - startSec;
+
+                if (duration > 0) {
+                    command = command.setDuration(duration);
+                }
             }
 
             command
@@ -104,7 +112,7 @@ router.all('/', async (req, res) => {
                     '-threads 0'
                 ])
                 .on('error', (err) => {
-                    console.error('[ERROR] FFmpeg error:', err.message);
+                    console.error('[FFmpeg error]', err.message);
                     if (!res.headersSent) {
                         res.status(500).send('Processing failed');
                     }
@@ -112,7 +120,7 @@ router.all('/', async (req, res) => {
                 .pipe(res, { end: true });
 
         } catch (err) {
-            console.error('[ERROR] Download failed:', err.message);
+            console.error('[Download failed]', err.message);
             if (!res.headersSent) {
                 res.status(500).send('Speed-up extraction failed');
             }
@@ -121,7 +129,10 @@ router.all('/', async (req, res) => {
     } catch (error) {
         console.error('Download route error:', error);
         if (!res.headersSent) {
-            res.status(500).json({ error: 'Failed to process download', message: error.message });
+            res.status(500).json({
+                error: 'Failed to process download',
+                message: error.message
+            });
         }
     }
 });
