@@ -9,17 +9,25 @@ process.on('unhandledRejection', (err) => {
 });
 
 const express = require('express');
-console.log('BOOT: express loaded');
-
 const app = express();
 
+console.log('BOOT: express loaded');
+
+// Basic test route (must respond)
 app.get('/', (req, res) => {
-  res.status(200).send('OK');
+  res.status(200).send('OK - Backend Running');
 });
 
-const PORT = Number(process.env.PORT) || 3000;
+// Optional health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+const PORT = process.env.PORT || 3000;
+
 console.log('BOOT: about to listen on', PORT);
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('BOOT: server listening on', PORT);
+// IMPORTANT: no '0.0.0.0'
+app.listen(PORT, () => {
+  console.log(`BOOT: server listening on ${PORT}`);
 });
